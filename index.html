@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird - Galaxy Level 10</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            overflow: hidden; 
+        }
+        .game-container { 
+            position: relative; 
+            border-radius: 16px; 
+            overflow: hidden; 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5); 
+        }
+        canvas { 
+            display: block; 
+            /* Background dasar awal (Sky Blue), transisi warna nanti diatur via JS jika masuk level 10 */
+            background: linear-gradient(to bottom, #4FC3F7 0%, #81D4FA 60%, #A5D6A7 60%, #66BB6A 100%); 
+            transition: background 1.5s ease;
+        }
+        .overlay { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            background: rgba(0,0,0,0.6); 
+            transition: opacity 0.3s; 
+            z-index: 30;
+        }
+        .overlay.hidden { opacity: 0; pointer-events: none; }
+        .overlay h1 { 
+            color: #FFD54F; 
+            font-size: 48px; 
+            text-shadow: 3px 3px 0 #E65100, -1px -1px 0 #E65100; 
+            margin-bottom: 10px; 
+            animation: bounce 1s infinite; 
+        }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .overlay p { color: #fff; font-size: 18px; margin-bottom: 30px; }
+        .btn { 
+            padding: 14px 40px; 
+            font-size: 20px; 
+            font-weight: bold; 
+            border: none; 
+            border-radius: 50px; 
+            cursor: pointer; 
+            transition: transform 0.2s, box-shadow 0.2s; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+        }
+        .btn-start { 
+            background: linear-gradient(135deg, #FFD54F, #FFB300); 
+            color: #3E2723; 
+            box-shadow: 0 6px 0 #E65100, 0 10px 20px rgba(0,0,0,0.3); 
+        }
+        .btn-start:hover { transform: translateY(-3px); box-shadow: 0 9px 0 #E65100, 0 15px 25px rgba(0,0,0,0.3); }
+        .btn-start:active { transform: translateY(3px); box-shadow: 0 3px 0 #E65100, 0 5px 10px rgba(0,0,0,0.3); }
+        
+        .score-display { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); font-size: 48px; font-weight: bold; color: #fff; text-shadow: 3px 3px 0 rgba(0,0,0,0.3); z-index: 10; pointer-events: none; }
+        .level-display { position: absolute; top: 25px; left: 25px; font-size: 20px; font-weight: bold; color: #FFD54F; text-shadow: 2px 2px 0 rgba(0,0,0,0.5); z-index: 10; pointer-events: none; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px; }
+        .lives-display { position: absolute; top: 25px; right: 25px; font-size: 22px; z-index: 10; pointer-events: none; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 20px; color: #ff4757; text-shadow: 1px 1px 0 rgba(0,0,0,0.5); letter-spacing: 2px; }
+        .high-score { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); font-size: 18px; color: #FFD54F; text-shadow: 1px 1px 0 rgba(0,0,0,0.3); z-index: 10; pointer-events: none; }
+        .final-score { color: #FFD54F; font-size: 36px; font-weight: bold; margin: 10px 0; text-shadow: 2px 2px 0 #E65100; }
+        
+        .level-up-notif { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0); font-size: 40px; font-weight: bold; color: #FFD54F; text-shadow: 3px 3px 0 #E65100; z-index: 20; pointer-events: none; opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .level-up-notif.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        .medal { font-size: 60px; margin: 10px 0; animation: medalPop 0.5s ease-out; }
+        @keyframes medalPop { 0% { transform: scale(0) rotate(-180deg); } 100% { transform: scale(1) rotate(0deg); } }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="score-display" id="scoreDisplay">0</div>
+        <div class="level-display" id="levelDisplay">Lv. 1</div>
+        <div class="lives-display" id="livesDisplay">❤️❤️❤️</div>
+        <div class="level-up-notif" id="levelUpNotif">LEVEL UP!</div>
+        <div class="high-score" id="highScoreDisplay">Best: 0</div>
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        
+        <div class="overlay" id="startScreen">
+            <h1>🐦 Flappy Bird</h1>
+            <p>Ketuk layar atau tekan spasi untuk terbang!</p>
+            <button class="btn btn-start" id="startBtn">Mulai</button>
+        </div>
+        
+        <div class="overlay hidden" id="gameOverScreen">
+            <h1>Game Over!</h1>
+            <div class="medal" id="medal">🏅</div>
+            <div class="final-score" id="finalScore">0</div>
+            <p id="newRecord" style="color:#FFD54F; display:none; font-weight:bold;">🏆 Rekor Baru!</p>
+            <button class="btn btn-start" id="restartBtn">Coba Lagi</button>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const startScreen = document.getElementById('startScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const levelDisplay = document.getElementById('levelDisplay');
+const livesDisplay = document.getElementById('livesDisplay');
+const levelUpNotif = document.getElementById('levelUpNotif');
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+const finalScoreEl = document.getElementById('finalScore');
+const medalEl = document.getElementById('medal');
+const newRecordEl = document.getElementById('newRecord');
+
+// Game constants
+const GRAVITY = 0.5;
+const JUMP_STRENGTH = -8;
+const PIPE_WIDTH = 60;
+
+// Game state
+let bird = { x: 80, y: 250, width: 34, height: 24, velocity: 0, rotation: 0 };
+let pipes = [];
+let score = 0;
+let highScore = parseInt(localStorage.getItem('flappyHighScore')) || 0;
+let gameState = 'start';
+let lastPipeTime = 0;
+let particles = [];
+let clouds = [];
+let stars = []; // Efek bintang Bima Sakti
+let groundOffset = 0;
+
+// Level & Lives Variables
+let currentLevel = 1;
+let pipeSpeed = 2.5;
+let pipeGap = 150;
+let minSpawnInterval = 2200;
+let maxSpawnInterval = 3000;
+let currentSpawnInterval = minSpawnInterval;
+
+let maxLives = 3;
+let currentLives = maxLives;
+let invulnerableFrames = 0;
+
+highScoreDisplay.textContent = 'Best: ' + highScore;
+
+// Audio setup
+let audioCtx = null;
+function initAudio() { if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } }
+function playSound(type) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    if (type === 'jump') {
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(700, now + 0.1);
+        gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0, now + 0.1);
+        osc.start(now); osc.stop(now + 0.1);
+    } else if (type === 'score') {
+        osc.type = 'sine'; osc.frequency.setValueAtTime(650, now); osc.frequency.setValueAtTime(950, now + 0.08);
+        gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.25);
+        osc.start(now); osc.stop(now + 0.25);
+    } else if (type === 'levelup') {
+        osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, now); osc.frequency.setValueAtTime(659.25, now + 0.1);
+        osc.frequency.setValueAtTime(783.99, now + 0.2); osc.frequency.setValueAtTime(1046.50, now + 0.3);
+        gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0, now + 0.5);
+        osc.start(now); osc.stop(now + 0.5);
+    } else if (type === 'hit') {
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, now); osc.frequency.linearRampToValueAtTime(60, now + 0.4);
+        gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4);
+    }
+}
+
+// Inisialisasi Elemen Background awal
+for (let i = 0; i < 5; i++) {
+    clouds.push({ x: Math.random() * canvas.width, y: Math.random() * 200, width: 60 + Math.random() * 40, speed: 0.3 + Math.random() * 0.5 });
+}
+// Generate bintang rahasia (hanya muncul saat level >= 10)
+for (let i = 0; i < 40; i++) {
+    stars.push({ x: Math.random() * canvas.width, y: Math.random() * (canvas.height - 50), size: 1 + Math.random() * 3, alpha: Math.random() });
+}
+
+function drawBackground() {
+    if (currentLevel >= 10) {
+        // --- NUANSA GALAXY / BIMA SAKTI ---
+        let spaceGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        spaceGrad.addColorStop(0, '#020024');   // Deep Space Blue
+        spaceGrad.addColorStop(0.5, '#090979'); // Cosmic Purple/Blue
+        spaceGrad.addColorStop(1, '#1b003a');   // Nebula Violet
+        ctx.fillStyle = spaceGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Menggambar Bintang Kelap-Kelip
+        ctx.fillStyle = '#ffffff';
+        stars.forEach(star => {
+            star.alpha += (Math.random() - 0.5) * 0.1;
+            star.alpha = Math.max(0.2, Math.min(1, star.alpha));
+            ctx.globalAlpha = star.alpha;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1.0; // reset
+    } else {
+        // Tema Siang Hari Biasa (Level 1-9)
+        let skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        skyGrad.addColorStop(0, '#4FC3F7');
+        skyGrad.addColorStop(0.6, '#81D4FA');
+        skyGrad.addColorStop(0.61, '#A5D6A7');
+        skyGrad.addColorStop(1, '#66BB6A');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Awan hanya digambar jika di bawah level 10
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        clouds.forEach(cloud => {
+            ctx.beginPath();
+            ctx.arc(cloud.x, cloud.y, cloud.width/3, 0, Math.PI * 2);
+            ctx.arc(cloud.x + cloud.width/3, cloud.y - 5, cloud.width/4, 0, Math.PI * 2);
+            ctx.arc(cloud.x + cloud.width/2, cloud.y, cloud.width/3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+}
+
+function drawBird() {
+    if (invulnerableFrames > 0 && Math.floor(invulnerableFrames / 5) % 2 === 0) return;
+
+    ctx.save();
+    ctx.translate(bird.x + bird.width/2, bird.y + bird.height/2);
+    let targetRotation = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, bird.velocity * 0.1));
+    bird.rotation += (targetRotation - bird.rotation) * 0.1;
+    ctx.rotate(bird.rotation);
+    
+    // Warna burung berganti jadi Alien/Neon Cyber saat di Bima Sakti
+    ctx.fillStyle = currentLevel >= 10 ? '#00FFCC' : '#FFD54F'; 
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bird.width/2, bird.height/2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(6, -4, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.arc(8, -4, 3, 0, Math.PI * 2); ctx.fill();
+    
+    // Warna Paruh burung
+    ctx.fillStyle = currentLevel >= 10 ? '#FF007F' : '#FF6F00';
+    ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(22, 3); ctx.lineTo(12, 6); ctx.closePath(); ctx.fill();
+    
+    ctx.fillStyle = currentLevel >= 10 ? '#00ccff' : '#FFCA28';
+    ctx.beginPath(); ctx.ellipse(-2, 4, 10, 6, 0.3, 0, Math.PI * 2); ctx.fill();
+    
+    ctx.strokeStyle = currentLevel >= 10 ? '#006655' : '#F57F17';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, 0, bird.width/2, bird.height/2, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+}
+
+function drawPipe(pipe) {
+    const gradient = ctx.createLinearGradient(pipe.x, 0, pipe.x + PIPE_WIDTH, 0);
+    
+    if (currentLevel >= 10) {
+        // Pipa Cyber Neon di Luar Angkasa
+        gradient.addColorStop(0, '#bd00ff');
+        gradient.addColorStop(0.5, '#ea00d9');
+        gradient.addColorStop(1, '#711c91');
+    } else {
+        // Pipa Hijau Klasik
+        gradient.addColorStop(0, '#43A047');
+        gradient.addColorStop(0.5, '#66BB6A');
+        gradient.addColorStop(1, '#388E3C');
+    }
+
+    let borderColors = currentLevel >= 10 ? '#3f006b' : '#2E7D32';
+    let lightColors = currentLevel >= 10 ? '#00f0ff' : '#43A047';
+
+    // Pipa Atas
+    ctx.fillStyle = gradient;
+    ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.topHeight);
+    ctx.fillStyle = borderColors;
+    ctx.fillRect(pipe.x - 3, pipe.topHeight - 20, PIPE_WIDTH + 6, 20);
+    ctx.fillStyle = lightColors;
+    ctx.fillRect(pipe.x - 3, pipe.topHeight - 20, PIPE_WIDTH + 6, 4);
+
+    // Pipa Bawah
+    ctx.fillStyle = gradient;
+    ctx.fillRect(pipe.x, pipe.topHeight + pipe.pipeGap, PIPE_WIDTH, canvas.height - pipe.topHeight - pipe.pipeGap);
+    ctx.fillStyle = borderColors;
+    ctx.fillRect(pipe.x - 3, pipe.topHeight + pipe.pipeGap, PIPE_WIDTH + 6, 20);
+    ctx.fillStyle = lightColors;
+    ctx.fillRect(pipe.x - 3, pipe.topHeight + pipe.pipeGap + 16, PIPE_WIDTH + 6, 4);
+}
+
+function drawGround() {
+    // Tanah berubah jadi material permukaan bulan / kosmik kelam pada Level 10
+    if (currentLevel >= 10) {
+        ctx.fillStyle = '#232526'; // Dark Moon Rock
+        ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+        ctx.fillStyle = '#414345'; // Crater Edge
+        ctx.fillRect(0, canvas.height - 50, canvas.width, 10);
+    } else {
+        ctx.fillStyle = '#8D6E63';
+        ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+        ctx.fillStyle = '#66BB6A';
+        ctx.fillRect(0, canvas.height - 50, canvas.width, 10);
+    }
+    
+    ctx.fillStyle = currentLevel >= 10 ? '#111' : '#795548';
+    for (let i = 0; i < canvas.width; i += 20) {
+        let x = (i + groundOffset) % canvas.width;
+        ctx.fillRect(x, canvas.height - 35, 3, 8);
+        ctx.fillRect(x + 10, canvas.height - 25, 3, 6);
+    }
+}
+
+function createParticles(x, y, color, count = 8) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x: x, y: y,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            life: 1, color: color, size: 3 + Math.random() * 4
+        });
+    }
+}
+
+function drawParticles() {
+    particles.forEach((p, i) => {
+        ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1; p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+        if (p.life <= 0) particles.splice(i, 1);
+    });
+}
+
+function spawnPipe() {
+    const minHeight = 60;
+    const maxHeight = canvas.height - pipeGap - minHeight - 50;
+    const topHeight = minHeight + Math.random() * (maxHeight - minHeight);
+    pipes.push({ x: canvas.width, topHeight: topHeight, passed: false, pipeGap: pipeGap });
+}
+
+function checkCollision() {
+    if (bird.y + bird.height >= canvas.height - 50) return { hit: true, type: 'ground' };
+    if (bird.y < 0) return { hit: true, type: 'ceiling' };
+    if (invulnerableFrames > 0) return { hit: false };
+
+    for (let pipe of pipes) {
+        if (bird.x + bird.width > pipe.x && bird.x < pipe.x + PIPE_WIDTH && (bird.y < pipe.topHeight || bird.y + bird.height > pipe.topHeight + pipe.pipeGap)) {
+            return { hit: true, type: 'pipe' };
+        }
+    }
+    return { hit: false };
+}
+
+function updateLivesUI() {
+    let hearts = '';
+    for(let i=0; i<maxLives; i++) hearts += i < currentLives ? '❤️' : '🖤';
+    livesDisplay.textContent = hearts;
+}
+
+function checkLevelUp() {
+    let targetLevel = Math.floor(score / 5) + 1;
+    if (targetLevel > currentLevel) {
+        currentLevel = targetLevel;
+        levelDisplay.textContent = 'Lv. ' + currentLevel;
+        
+        // Selalu naikkan kecepatan tiap levelnya secara konstan (+0.5)
+        pipeSpeed += 0.5; 
+        pipeGap = Math.max(95, pipeGap - 6); 
+        minSpawnInterval = Math.max(1100, minSpawnInterval - 200);
+        maxSpawnInterval = Math.max(1600, maxSpawnInterval - 200);
+        
+        playSound('levelup');
+        
+        if (currentLevel === 10) {
+            levelUpNotif.innerHTML = "GALAXY UNLOCKED!<br><span style='font-size:24px;'>🚀 NUANSA BIMA SAKTI 🚀</span>";
+        } else {
+            levelUpNotif.textContent = `LEVEL ${currentLevel}!`;
+        }
+
+        levelUpNotif.classList.add('show');
+        setTimeout(() => { levelUpNotif.classList.remove('show'); }, 2000);
+        
+        // Ledakan partikel warna neon jika sudah masuk level galaxy
+        let pColor = currentLevel >= 10 ? '#00FFCC' : '#FFD54F';
+        createParticles(bird.x, bird.y, pColor, 20);
+    }
+}
+
+function update() {
+    if (gameState !== 'playing') return;
+    if (invulnerableFrames > 0) invulnerableFrames--;
+
+    bird.velocity += GRAVITY;
+    bird.y += bird.velocity;
+
+    // Gerakan objek luar angkasa/awan luar
+    if (currentLevel >= 10) {
+        stars.forEach(star => {
+            star.x -= (pipeSpeed * 0.1); // Efek paralaks lambat bintang
+            if (star.x < 0) star.x = canvas.width;
+        });
+    } else {
+        clouds.forEach(cloud => {
+            cloud.x -= cloud.speed;
+            if (cloud.x + cloud.width < 0) { cloud.x = canvas.width + 20; cloud.y = Math.random() * 200; }
+        });
+    }
+
+    pipes.forEach(pipe => {
+        pipe.x -= pipeSpeed; 
+        if (!pipe.passed && pipe.x + PIPE_WIDTH < bird.x) {
+            pipe.passed = true; score++; scoreDisplay.textContent = score;
+            playSound('score');
+            let pColor = currentLevel >= 10 ? '#ea00d9' : '#FFD54F';
+            createParticles(bird.x + 20, bird.y, pColor, 5);
+            checkLevelUp(); 
+        }
+    });
+
+    pipes = pipes.filter(pipe => pipe.x + PIPE_WIDTH > -10);
+
+    const now = Date.now();
+    if (now - lastPipeTime > currentSpawnInterval) {
+        spawnPipe(); lastPipeTime = now;
+        currentSpawnInterval = minSpawnInterval + Math.random() * (maxSpawnInterval - minSpawnInterval);
+    }
+
+    groundOffset += pipeSpeed;
+
+    let collision = checkCollision();
+    if (collision.hit) {
+        playSound('hit');
+        createParticles(bird.x + bird.width/2, bird.y + bird.height/2, '#FF6F00', 15);
+        
+        if (collision.type === 'ground') {
+            currentLives = 0; 
+        } else {
+            currentLives--; 
+            invulnerableFrames = 90; 
+            bird.velocity = JUMP_STRENGTH; 
+        }
+        
+        updateLivesUI();
+        if (currentLives <= 0) gameOver();
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    pipes.forEach(pipe => drawPipe(pipe));
+    drawGround();
+    drawBird();
+    drawParticles();
+}
+
+function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+function jump() {
+    if (gameState === 'playing') {
+        bird.velocity = JUMP_STRENGTH;
+        playSound('jump');
+        let trailColor = currentLevel >= 10 ? 'rgba(0, 255, 204, 0.6)' : 'rgba(255,255,255,0.6)';
+        createParticles(bird.x - 5, bird.y + bird.height/2, trailColor, 4);
+    }
+}
+
+function startGame() {
+    initAudio();
+    gameState = 'playing';
+    currentLevel = 1;
+    pipeSpeed = 2.5;
+    pipeGap = 150;
+    minSpawnInterval = 2200;
+    maxSpawnInterval = 3000;
+    currentLives = maxLives;
+    invulnerableFrames = 0;
+    updateLivesUI();
+
+    levelDisplay.textContent = 'Lv. 1';
+    levelUpNotif.classList.remove('show');
+    bird.y = 250; bird.velocity = 0; bird.rotation = 0;
+    pipes = []; particles = []; score = 0; scoreDisplay.textContent = '0';
+    lastPipeTime = Date.now();
+    currentSpawnInterval = minSpawnInterval + Math.random() * (maxSpawnInterval - minSpawnInterval);
+    
+    startScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    bird.velocity = JUMP_STRENGTH;
+    playSound('jump');
+}
+
+function gameOver() {
+    gameState = 'gameover';
+    levelUpNotif.classList.remove('show');
+    let isNewRecord = false;
+    if (score > highScore) { highScore = score; localStorage.setItem('flappyHighScore', highScore); isNewRecord = true; }
+    highScoreDisplay.textContent = 'Best: ' + highScore;
+    finalScoreEl.textContent = score;
+    newRecordEl.style.display = isNewRecord ? 'block' : 'none';
+
+    if (score >= 30) medalEl.textContent = '🏆';
+    else if (score >= 20) medalEl.textContent = '🥇';
+    else if (score >= 10) medalEl.textContent = '🥈';
+    else if (score >= 5) medalEl.textContent = '🥉';
+    else medalEl.textContent = '💔';
+
+    gameOverScreen.classList.remove('hidden');
+    createParticles(bird.x + bird.width/2, bird.y + bird.height/2, '#FFD54F', 20);
+}
+
+// Event listeners
+document.getElementById('startBtn').addEventListener('click', (e) => { e.stopPropagation(); startGame(); });
+document.getElementById('restartBtn').addEventListener('click', (e) => { e.stopPropagation(); startGame(); });
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); if (gameState === 'start') startGame(); else jump(); }
+});
+canvas.addEventListener('click', () => { if (gameState === 'start') startGame(); else jump(); });
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState === 'start') startGame(); else jump(); });
+
+gameLoop();
+</script>
+</body>
+</html>
